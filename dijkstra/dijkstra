@@ -1,0 +1,157 @@
+import heapq
+from collections import *
+from queue import *
+from numpy import *
+import matplotlib.pyplot as plt
+
+# Import data from lines_to_graph2.py
+
+from lines_to_graph2 import loadEdges, pointsToIDs, edgesToGraph, cities
+
+# AI used for syntax and helping with workflow
+
+def dijkstra(G, start, end):
+
+    distances = {}
+    predecessors = {}
+    
+    # Initialization (set everything to infinity)
+    for nod in G:
+        distances[nod] = float('inf')
+        predecessors[nod] = None    # Empty list of predecessors, from here will be created the path 
+        
+    distances[start] = 0
+    
+    fronta = []     # Priority queue
+    heapq.heappush(fronta, (0, start))  
+    
+    find_end = False
+    
+    while len(fronta) > 0:
+        dist, u = heapq.heappop(fronta)     # u = current node
+        
+        # If found end, then stop
+        if u == end:
+            find_end = True
+            break
+            
+        # If there we already have better way, ignore
+        if dist > distances[u]:
+            continue
+            
+        # Looking through neighbours
+        
+        if u in G:
+            for neighbour, w in G[u].items():
+                new_dist = dist + w     # new_dist = our already found path + w to new neighbour
+                
+                if new_dist < distances[neighbour]:     # If new distance is faster then update the list and mark "u" as predecessor
+                    distances[neighbour] = new_dist
+                    predecessors[neighbour] = u
+                    heapq.heappush(fronta, (new_dist, neighbour))
+    
+    # In case the graph is not continuous or the path form start to end doesnt exist
+    if not find_end or distances[end] == float('inf'):
+        return None, float('inf')
+        
+    # Creating path, backwards
+    # Using the list of predecessors to recreate the path
+    path = []
+    current = end
+    while current is not None:
+        path.append(current)
+        if current == start:
+            break
+        current = predecessors[current]
+        
+    # Reverse the order from END to START to START to END
+    path.reverse()
+    
+    return path, distances[end]
+
+
+# Applying the functions
+
+# Choose start and end
+start_city = "Ústí_nad_Labem"   # If you want a city with 2 or more words, use "_" between each word
+end_city = "Bečov"      # For example "Ústí_nad_Labem"
+file_cities = 'mesta_usti.txt'
+
+# Load roads
+# Choose what calculation you want to use
+# file = 'silnice_usti_vzdal.txt'                 # For calculating Euclid distance 
+# file = 'silnice_usti_cas.txt'                 # For calculating fastest time without any consideration of curvature of the roads
+file = 'silnice_usti_cas_klikatost.txt'       # For calculating fastest time considering curvature of the roads -> slowing down
+
+print(f"Calculating the route: {start_city} -> {end_city}")
+
+PS, PE, W = loadEdges(file)
+
+PSE = PS + PE
+PSE=unique(PSE,axis=0).tolist()
+PSE.insert(0, [1000000, 1000000])
+
+D = pointsToIDs(PSE)
+G = edgesToGraph(D, PS, PE, W)
+
+city_map = cities(file_cities, D)
+
+if start_city in city_map and end_city in city_map:
+    start_id = city_map[start_city]
+    end_id = city_map[end_city]
+
+    # Applying Dijkstra 
+    route, weight = dijkstra(G, start_id, end_id)
+
+    # Decision if it is a data with only euclid distance, we use units = "meters", other = "minutes"
+    if route:
+        if "vzdal" in file:
+            unit = "m"
+        else:
+            unit = "minutes"
+        print(f"Final cost: {weight:.2f} {unit}")
+    else:
+        print("Route doesn't esist.")
+else:
+    print("Starting point or end point isn't in a graph.")
+    
+    
+# VISUALISATION of the best route
+# AI help with errors 
+if route:
+    print("Visualisating the best route...")
+    
+    plt.figure(figsize=(12, 10))
+    
+    # Adding roads (lines) to the plot
+    for i in range(len(PS)):
+        plt.plot([PS[i][0], PE[i][0]], [PS[i][1], PE[i][1]], c='darkgray', linewidth=0.5)
+
+    # Recreating the best route
+    path_x = []
+    path_y = []
+    for node_id in route:
+        coord = PSE[node_id]
+        path_x.append(coord[0])
+        path_y.append(coord[1])
+        
+    plt.plot(path_x, path_y, c='red', linewidth=2, label='Route')
+    
+    # Creating marks - START
+    plt.scatter(path_x[0], path_y[0], c='black', marker='x', s=30, linewidth=3)
+    plt.text(path_x[0], path_y[0], f"  {start_city}", fontsize=12)
+    
+    # Creating marks - END
+    plt.scatter(path_x[-1], path_y[-1], c='black', marker='x', s=30, linewidth=3)
+    plt.text(path_x[-1], path_y[-1], f"  {end_city}", fontsize=12)
+
+    plt.title(f"Route from {start_city} to {end_city} ({weight:.2f} {unit})")
+    plt.axis('equal')
+    plt.ticklabel_format(style='plain', axis='both')    # Help from AI with labels not showing correctly
+    plt.xlabel('Coordinates X [m]')
+    plt.ylabel('Coordinates Y [m]') 
+    plt.grid(True)
+    plt.show()
+
+else:
+    print("No route found.")
